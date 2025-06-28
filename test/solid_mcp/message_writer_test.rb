@@ -53,7 +53,7 @@ module SolidMCP
       MessageWriter.instance.flush
       
       # Wait for the writer thread to process
-      assert wait_for_condition(3) { SolidMCP::Message.count > 0 }
+      assert wait_for_condition(3) { SolidMCP::Message.count > 0 }, "Expected messages to be written, but count is #{SolidMCP::Message.count}"
 
       message = SolidMCP::Message.first
       assert_not_nil message, "No message was written to database"

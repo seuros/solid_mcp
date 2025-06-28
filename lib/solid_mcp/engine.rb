@@ -8,6 +8,15 @@ module SolidMCP
       g.test_framework :minitest
     end
 
+    # Ensure app/models is in the autoload paths
+    config.autoload_paths << root.join("app/models")
+
+    initializer "solid_mcp.migrations" do
+      config.paths["db/migrate"].expanded.each do |expanded_path|
+        Rails.application.config.paths["db/migrate"] << expanded_path
+      end
+    end
+
     initializer "solid_mcp.configuration" do
       # Set default configuration if not already configured
       SolidMCP.configuration ||= Configuration.new

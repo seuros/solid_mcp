@@ -1,9 +1,7 @@
 # frozen_string_literal: true
 
-require "active_record"
-
 module SolidMCP
-  class Message < ActiveRecord::Base
+  class Message < Record
     self.table_name = "solid_mcp_messages"
 
     scope :for_session, ->(session_id) { where(session_id: session_id) }

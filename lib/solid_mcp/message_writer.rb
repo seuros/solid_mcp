@@ -131,7 +131,7 @@ module SolidMCP
       return if batch.empty?
 
       # Use raw SQL for maximum performance
-      ActiveRecord::Base.connection_pool.with_connection do |conn|
+      SolidMCP::Message.connection_pool.with_connection do |conn|
         values = batch.map do |msg|
           [
             conn.quote(msg[:session_id]),

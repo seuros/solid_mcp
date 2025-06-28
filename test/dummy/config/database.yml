@@ -1,0 +1,17 @@
+development:
+  primary:
+    adapter: sqlite3
+    database: db/development.sqlite3
+    url: nil
+
+test:
+  primary:
+    adapter: sqlite3
+    database: ":memory:"
+    url: nil
+  solid_mcp:
+    adapter: sqlite3
+    database: "file:solid_mcp_test?mode=memory&cache=shared"
+    pool: 10
+    timeout: 5000
+    url: nil

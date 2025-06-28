@@ -44,7 +44,7 @@ module SolidMCP
       return unless @running.true?
       
       # Ensure connection in thread
-      ActiveRecord::Base.connection_pool.with_connection do
+      SolidMCP::Message.connection_pool.with_connection do
         # In test environment, ensure schema is visible to this thread
         if ENV["RAILS_ENV"] == "test" && defined?(SolidMCP::ThreadDatabaseHelper)
           SolidMCP::ThreadDatabaseHelper.ensure_schema_visible
