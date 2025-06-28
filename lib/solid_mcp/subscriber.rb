@@ -23,7 +23,6 @@ module SolidMCP
       
       @timer_task = Concurrent::TimerTask.new(
         execution_interval: SolidMCP.configuration.polling_interval,
-        timeout_interval: 30,
         run_now: true
       ) do
         poll_once
