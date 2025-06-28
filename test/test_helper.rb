@@ -37,3 +37,8 @@ end
 class ActiveSupport::TestCase
   include SolidMCP::TestHelper
 end
+
+# Ensure SolidMCP is configured for tests
+SolidMCP.configure do |config|
+  config.logger = Rails.logger
+end

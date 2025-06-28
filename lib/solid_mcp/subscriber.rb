@@ -44,11 +44,6 @@ module SolidMCP
       
       # Ensure connection in thread
       SolidMCP::Message.connection_pool.with_connection do
-        # In test environment, ensure schema is visible to this thread
-        if ENV["RAILS_ENV"] == "test" && defined?(SolidMCP::ThreadDatabaseHelper)
-          SolidMCP::ThreadDatabaseHelper.ensure_schema_visible
-        end
-        
         messages = fetch_new_messages
         if messages.any?
           process_messages(messages)
@@ -79,13 +74,15 @@ module SolidMCP
     def process_messages(messages)
       messages.each do |message|
         @callbacks.each do |callback|
-          callback.call({
-            event_type: message.event_type,
-            data: message.data,  # data is already a JSON string from the database
-            id: message.id
-          })
-        rescue => e
-          SolidMCP::Logger.error "SolidMCP callback error: #{e.message}"
+          begin
+            callback.call({
+              event_type: message.event_type,
+              data: message.data,  # data is already a JSON string from the database
+              id: message.id
+            })
+          rescue => e
+            SolidMCP::Logger.error "SolidMCP callback error: #{e.message}"
+          end
         end
         @last_message_id = message.id
       end

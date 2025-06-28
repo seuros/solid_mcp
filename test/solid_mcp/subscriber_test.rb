@@ -157,23 +157,38 @@ module SolidMCP
     end
 
     def test_handles_callback_errors_gracefully
-      error_callback = ->(message) { raise "Test error!" }
+      error_count = 0
+      error_callback = ->(message) { 
+        error_count += 1
+        raise "Test error!" 
+      }
       good_callback = ->(message) { @received << message }
       
       subscriber = Subscriber.new(@session_id, [error_callback, good_callback])
       
-      SolidMCP::Message.create!(
+      msg = SolidMCP::Message.create!(
         session_id: @session_id,
         event_type: "error_test",
         data: "test",
         created_at: Time.current
       )
       
+      # Ensure message was created and is undelivered
+      assert_equal 1, SolidMCP::Message.for_session(@session_id).count
+      assert_equal 1, SolidMCP::Message.for_session(@session_id).undelivered.count
+      
       subscriber.start
       
+      # Wait for processing
+      sleep 0.5
+      
       # Despite error in first callback, second should still work
-      assert wait_for_condition { @received.any? }
+      assert wait_for_condition(3) { @received.any? }, "Expected messages to be received, but got none. Message id: #{msg.id}, delivered: #{msg.reload.delivered_at}, error_count: #{error_count}"
       assert_equal 1, @received.size
+      assert error_count > 0, "Error callback should have been called"
+      
+      # Message should be marked as delivered
+      assert_not_nil msg.reload.delivered_at, "Message should be marked as delivered"
       
       subscriber.stop
     end
