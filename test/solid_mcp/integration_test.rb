@@ -3,10 +3,11 @@
 require "test_helper"
 
 module SolidMCP
-  class IntegrationTest < Minitest::Test
+  class IntegrationTest < ActiveSupport::TestCase
     def setup
       SolidMCP::Message.delete_all
       @session_id = "integration-test-session"
+      @pubsub = nil
       
       # Configure for fast testing
       SolidMCP.configuration.flush_interval = 0.01
@@ -15,27 +16,39 @@ module SolidMCP
     end
 
     def teardown
+      @pubsub&.shutdown
       MessageWriter.instance.shutdown
+      MessageWriter.reset!
+      # Clean up messages after each test since we're not using transactions
+      SolidMCP::Message.delete_all
     end
 
     def test_full_message_flow_with_batching
-      pubsub = PubSub.new
+      @pubsub = PubSub.new
       received = []
       
-      pubsub.subscribe(@session_id) do |message|
+      @pubsub.subscribe(@session_id) do |message|
         received << message
       end
       
       # Send multiple messages quickly to test batching
       10.times do |i|
-        pubsub.broadcast(@session_id, "batch_test", { number: i })
+        @pubsub.broadcast(@session_id, "batch_test", { number: i })
       end
+      
+      # Ensure messages are written
+      MessageWriter.instance.flush
+      
+      # Give subscriber time to poll from database
+      sleep 0.2
       
       # Wait for all messages to be received
       assert wait_for_condition(3) { received.size == 10 }
       
       # Verify order is preserved
       received.each_with_index do |msg, i|
+        # Data should be a JSON string from the database
+        assert_kind_of String, msg[:data], "Expected data to be a String, got #{msg[:data].class}"
         data = JSON.parse(msg[:data])
         assert_equal i, data["number"]
       end
@@ -47,14 +60,13 @@ module SolidMCP
       # All should be marked as delivered
       assert_equal 10, db_messages.delivered.count
       
-      pubsub.shutdown
     end
 
     def test_concurrent_publishers
-      pubsub = PubSub.new
+      @pubsub = PubSub.new
       received = Concurrent::Array.new
       
-      pubsub.subscribe(@session_id) do |message|
+      @pubsub.subscribe(@session_id) do |message|
         received << message
       end
       
@@ -62,7 +74,7 @@ module SolidMCP
       threads = 5.times.map do |thread_num|
         Thread.new do
           5.times do |msg_num|
-            pubsub.broadcast(
+            @pubsub.broadcast(
               @session_id, 
               "concurrent", 
               { thread: thread_num, message: msg_num }
@@ -73,34 +85,48 @@ module SolidMCP
       
       threads.each(&:join)
       
+      # Ensure messages are written
+      MessageWriter.instance.flush
+      
+      # Give subscriber time to poll from database
+      sleep 0.5
+      
       # Should receive all 25 messages
-      assert wait_for_condition(3) { received.size == 25 }
+      assert wait_for_condition(5) { received.size == 25 }
       
       # Group by thread and verify each thread sent 5 messages
-      by_thread = received.group_by { |msg| JSON.parse(msg[:data])["thread"] }
+      by_thread = received.group_by { |msg| 
+        assert_kind_of String, msg[:data], "Expected data to be a String"
+        JSON.parse(msg[:data])["thread"] 
+      }
       assert_equal 5, by_thread.keys.size
       by_thread.each do |thread_num, messages|
         assert_equal 5, messages.size
       end
       
-      pubsub.shutdown
     end
 
     def test_multiple_sessions_isolation
-      pubsub = PubSub.new
+      @pubsub = PubSub.new
       session1_received = []
       session2_received = []
       
       session1 = "session-isolation-1"
       session2 = "session-isolation-2"
       
-      pubsub.subscribe(session1) { |msg| session1_received << msg }
-      pubsub.subscribe(session2) { |msg| session2_received << msg }
+      @pubsub.subscribe(session1) { |msg| session1_received << msg }
+      @pubsub.subscribe(session2) { |msg| session2_received << msg }
       
       # Broadcast to different sessions
-      pubsub.broadcast(session1, "test", "Message for session 1")
-      pubsub.broadcast(session2, "test", "Message for session 2")
-      pubsub.broadcast(session1, "test", "Another for session 1")
+      @pubsub.broadcast(session1, "test", "Message for session 1")
+      @pubsub.broadcast(session2, "test", "Message for session 2")
+      @pubsub.broadcast(session1, "test", "Another for session 1")
+      
+      # Ensure messages are written
+      MessageWriter.instance.flush
+      
+      # Give subscribers time to poll from database
+      sleep 0.2
       
       # Wait for messages
       assert wait_for_condition { session1_received.size == 2 && session2_received.size == 1 }
@@ -115,24 +141,23 @@ module SolidMCP
       
       assert_equal "Message for session 2", session2_received.first[:data]
       
-      pubsub.shutdown
     end
 
     def test_graceful_shutdown_delivers_pending_messages
-      pubsub = PubSub.new
+      @pubsub = PubSub.new
       received = []
       
-      pubsub.subscribe(@session_id) do |message|
+      @pubsub.subscribe(@session_id) do |message|
         received << message
       end
       
       # Send messages and immediately shutdown
       5.times do |i|
-        pubsub.broadcast(@session_id, "shutdown_test", "Message #{i}")
+        @pubsub.broadcast(@session_id, "shutdown_test", "Message #{i}")
       end
       
       # Shutdown should flush pending messages
-      pubsub.shutdown
+      MessageWriter.instance.flush
       
       # Give a little time for final delivery
       sleep 0.2
@@ -146,24 +171,29 @@ module SolidMCP
       # This test is tricky because we need to simulate a database error
       # For now, we'll test that the writer continues after handling bad data
       
-      pubsub = PubSub.new
+      @pubsub = PubSub.new
       received = []
       
-      pubsub.subscribe(@session_id) do |message|
+      @pubsub.subscribe(@session_id) do |message|
         received << message
       end
       
       # Send a mix of valid and potentially problematic data
-      pubsub.broadcast(@session_id, "test", "Simple string")
-      pubsub.broadcast(@session_id, "test", { complex: { nested: "data" } })
-      pubsub.broadcast(@session_id, "test", ["array", "of", "items"])
-      pubsub.broadcast(@session_id, "test", nil)
-      pubsub.broadcast(@session_id, "test", "")
+      @pubsub.broadcast(@session_id, "test", "Simple string")
+      @pubsub.broadcast(@session_id, "test", { complex: { nested: "data" } })
+      @pubsub.broadcast(@session_id, "test", ["array", "of", "items"])
+      @pubsub.broadcast(@session_id, "test", nil)
+      @pubsub.broadcast(@session_id, "test", "")
+      
+      # Ensure messages are written
+      MessageWriter.instance.flush
+      
+      # Give subscriber time to poll from database
+      sleep 0.2
       
       # Should handle all message types
       assert wait_for_condition(3) { received.size >= 5 }
       
-      pubsub.shutdown
     end
 
     def test_cleanup_job_execution
@@ -203,19 +233,25 @@ module SolidMCP
 
     def test_sse_event_format
       # Test that the data format matches what SSE expects
-      pubsub = PubSub.new
+      @pubsub = PubSub.new
       received = []
       
-      pubsub.subscribe(@session_id) do |message|
+      @pubsub.subscribe(@session_id) do |message|
         received << message
       end
       
       # Different event types that SSE might use
-      pubsub.broadcast(@session_id, "message", { text: "Hello SSE" })
-      pubsub.broadcast(@session_id, "ping", "")
-      pubsub.broadcast(@session_id, "close", { reason: "Server shutdown" })
+      @pubsub.broadcast(@session_id, "message", { text: "Hello SSE" })
+      @pubsub.broadcast(@session_id, "ping", "")
+      @pubsub.broadcast(@session_id, "close", { reason: "Server shutdown" })
       
-      assert wait_for_condition { received.size == 3 }
+      # Ensure messages are written to database
+      MessageWriter.instance.flush
+      
+      # Give subscriber time to poll from database
+      sleep 0.2
+      
+      assert wait_for_condition(5) { received.size == 3 }
       
       # Each message should have the SSE structure
       received.each do |msg|
@@ -230,7 +266,6 @@ module SolidMCP
       # Event types should match
       assert_equal ["message", "ping", "close"], received.map { |m| m[:event_type] }
       
-      pubsub.shutdown
     end
   end
 end

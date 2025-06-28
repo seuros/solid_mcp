@@ -3,7 +3,7 @@
 require "test_helper"
 
 module SolidMCP
-  class MessageTest < Minitest::Test
+  class MessageTest < ActiveSupport::TestCase
     def setup
       SolidMCP::Message.delete_all
     end

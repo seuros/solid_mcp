@@ -3,7 +3,7 @@
 require "test_helper"
 
 module SolidMCP
-  class ConfigurationTest < Minitest::Test
+  class ConfigurationTest < ActiveSupport::TestCase
     def setup
       @config = Configuration.new
     end
@@ -16,13 +16,13 @@ module SolidMCP
     end
 
     def test_delivered_retention_returns_duration
-      assert_equal 3600.seconds, @config.delivered_retention
-      assert_instance_of ActiveSupport::Duration, @config.delivered_retention
+      assert_equal 3600.seconds, @config.delivered_retention_seconds
+      assert_instance_of ActiveSupport::Duration, @config.delivered_retention_seconds
     end
 
     def test_undelivered_retention_returns_duration
-      assert_equal 86400.seconds, @config.undelivered_retention
-      assert_instance_of ActiveSupport::Duration, @config.undelivered_retention
+      assert_equal 86400.seconds, @config.undelivered_retention_seconds
+      assert_instance_of ActiveSupport::Duration, @config.undelivered_retention_seconds
     end
 
     def test_configuration_is_mutable

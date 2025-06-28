@@ -2,15 +2,17 @@
 
 require_relative "solid_mcp/version"
 require_relative "solid_mcp/configuration"
+require_relative "solid_mcp/logger"
 require_relative "solid_mcp/engine" if defined?(Rails)
 
-# Load required components based on environment
-if defined?(Rails) && Rails.env.test?
+# Always load core components
+require_relative "solid_mcp/message_writer"
+require_relative "solid_mcp/subscriber"
+require_relative "solid_mcp/cleanup_job"
+
+# Load test components in test environment
+if ENV["RAILS_ENV"] == "test"
   require_relative "solid_mcp/test_pub_sub"
-else
-  require_relative "solid_mcp/message_writer"
-  require_relative "solid_mcp/subscriber"
-  require_relative "solid_mcp/cleanup_job"
 end
 
 # Always require pub_sub after environment-specific components

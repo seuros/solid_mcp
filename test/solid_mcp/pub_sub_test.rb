@@ -3,8 +3,13 @@
 require "test_helper"
 
 module SolidMCP
-  class PubSubTest < Minitest::Test
+  class PubSubTest < ActiveSupport::TestCase
     def setup
+      # Configure for fast testing
+      SolidMCP.configuration.flush_interval = 0.01
+      SolidMCP.configuration.polling_interval = 0.05
+      SolidMCP.configuration.batch_size = 10
+      
       @pubsub = PubSub.new
       @received_messages = []
       @callback = ->(message) { @received_messages << message }
@@ -12,6 +17,10 @@ module SolidMCP
 
     def teardown
       @pubsub.shutdown if @pubsub
+      MessageWriter.instance.shutdown
+      MessageWriter.reset!
+      # Clean up messages after each test since we're not using transactions
+      SolidMCP::Message.delete_all
     end
 
     def test_subscribe_and_broadcast
@@ -20,8 +29,14 @@ module SolidMCP
       @pubsub.subscribe(session_id, &@callback)
       @pubsub.broadcast(session_id, "test_event", { message: "Hello" })
       
+      # Ensure message is written to database
+      MessageWriter.instance.flush
+      
+      # Give subscriber time to poll from database
+      sleep 0.2
+      
       # Wait for message to be delivered
-      assert wait_for_condition { @received_messages.any? }
+      assert wait_for_condition(5) { @received_messages.any? }
       
       message = @received_messages.first
       assert_equal "test_event", message[:event_type]
@@ -38,7 +53,13 @@ module SolidMCP
       
       @pubsub.broadcast(session_id, "event", "data")
       
-      assert wait_for_condition { received1.any? && received2.any? }
+      # Ensure message is written to database
+      MessageWriter.instance.flush
+      
+      # Give subscribers time to poll from database
+      sleep 0.2
+      
+      assert wait_for_condition(5) { received1.any? && received2.any? }
       assert_equal 1, received1.size
       assert_equal 1, received2.size
     end
@@ -49,7 +70,13 @@ module SolidMCP
       @pubsub.subscribe(session_id, &@callback)
       @pubsub.broadcast(session_id, "event1", "data1")
       
-      assert wait_for_condition { @received_messages.size == 1 }
+      # Ensure message is written to database
+      MessageWriter.instance.flush
+      
+      # Give subscriber time to poll from database
+      sleep 0.2
+      
+      assert wait_for_condition(5) { @received_messages.size == 1 }
       
       @pubsub.unsubscribe(session_id)
       @pubsub.broadcast(session_id, "event2", "data2")
@@ -73,7 +100,13 @@ module SolidMCP
       @pubsub.broadcast(session1, "event", "for session 1")
       @pubsub.broadcast(session2, "event", "for session 2")
       
-      assert wait_for_condition { received1.any? && received2.any? }
+      # Ensure messages are written to database
+      MessageWriter.instance.flush
+      
+      # Give subscribers time to poll from database
+      sleep 0.2
+      
+      assert wait_for_condition(5) { received1.any? && received2.any? }
       
       assert_equal 1, received1.size
       assert_equal 1, received2.size

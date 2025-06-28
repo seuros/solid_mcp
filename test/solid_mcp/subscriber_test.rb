@@ -3,7 +3,7 @@
 require "test_helper"
 
 module SolidMCP
-  class SubscriberTest < Minitest::Test
+  class SubscriberTest < ActiveSupport::TestCase
     def setup
       # Clear any existing messages
       SolidMCP::Message.delete_all
@@ -18,6 +18,8 @@ module SolidMCP
 
     def teardown
       @subscriber.stop if @subscriber
+      # Clean up messages after each test since we're not using transactions
+      SolidMCP::Message.delete_all
     end
 
     def test_polls_for_new_messages

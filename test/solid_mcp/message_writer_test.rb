@@ -3,20 +3,26 @@
 require "test_helper"
 
 module SolidMCP
-  class MessageWriterTest < Minitest::Test
+  class MessageWriterTest < ActiveSupport::TestCase
     def setup
       # Clear any existing messages
       SolidMCP::Message.delete_all
       
-      # Reset the singleton instance
-      MessageWriter.instance.shutdown
-      MessageWriter.instance.instance_variable_set(:@thread, nil)
-      MessageWriter.instance.instance_variable_set(:@queue, Queue.new)
-      MessageWriter.instance.send(:start_thread)
+      # Configure for faster testing
+      SolidMCP.configuration.flush_interval = 0.01
+      SolidMCP.configuration.batch_size = 200
+      
+      # Ensure MessageWriter is properly initialized
+      # The singleton will initialize itself on first access
+      MessageWriter.instance
     end
 
     def teardown
-      MessageWriter.instance.shutdown
+      # Ensure any pending messages are flushed
+      if MessageWriter.instance.instance_variable_get(:@executor)&.running?
+        MessageWriter.instance.flush
+      end
+      SolidMCP::Message.delete_all
     end
 
     def test_singleton_instance
@@ -44,13 +50,13 @@ module SolidMCP
       data = { message: "Hello, World!" }
 
       MessageWriter.instance.enqueue(session_id, event_type, data)
+      MessageWriter.instance.flush
       
       # Wait for the writer thread to process
-      assert wait_for_condition(2) do
-        SolidMCP::Message.count > 0
-      end
+      assert wait_for_condition(3) { SolidMCP::Message.count > 0 }
 
       message = SolidMCP::Message.first
+      assert_not_nil message, "No message was written to database"
       assert_equal session_id, message.session_id
       assert_equal event_type, message.event_type
       assert_equal data.to_json, message.data
@@ -66,10 +72,10 @@ module SolidMCP
         MessageWriter.instance.enqueue("session-batch", "event", { num: i })
       end
 
+      MessageWriter.instance.flush
+      
       # Wait for batch to be written
-      assert wait_for_condition(2) do
-        SolidMCP::Message.count == 5
-      end
+      assert wait_for_condition(2) { SolidMCP::Message.count == 5 }
 
       # All messages should be written in one batch
       messages = SolidMCP::Message.where(session_id: "session-batch").order(:id)
@@ -88,10 +94,9 @@ module SolidMCP
 
     def test_handles_string_data
       MessageWriter.instance.enqueue("session-string", "event", "plain string data")
+      MessageWriter.instance.flush
       
-      assert wait_for_condition(2) do
-        SolidMCP::Message.count > 0
-      end
+      assert wait_for_condition(2) { SolidMCP::Message.count > 0 }
 
       message = SolidMCP::Message.first
       assert_equal "plain string data", message.data
@@ -100,10 +105,9 @@ module SolidMCP
     def test_handles_hash_data
       data = { key: "value", nested: { inner: "data" } }
       MessageWriter.instance.enqueue("session-hash", "event", data)
+      MessageWriter.instance.flush
       
-      assert wait_for_condition(2) do
-        SolidMCP::Message.count > 0
-      end
+      assert wait_for_condition(2) { SolidMCP::Message.count > 0 }
 
       message = SolidMCP::Message.first
       assert_equal data.to_json, message.data
@@ -125,6 +129,9 @@ module SolidMCP
 
       # All messages should be written
       assert_equal 10, SolidMCP::Message.where(session_id: "shutdown-test").count
+    ensure
+      # Reset the singleton after this test
+      MessageWriter.reset!
     end
 
     def test_thread_restarts_on_error

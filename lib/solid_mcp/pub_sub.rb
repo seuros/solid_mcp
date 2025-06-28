@@ -4,11 +4,7 @@ require "concurrent/map"
 require "concurrent/array"
 
 module SolidMCP
-  # In test environment, use TestPubSub
-  if defined?(Rails) && Rails.env.test?
-    PubSub = TestPubSub
-  else
-    class PubSub
+  class PubSub
     def initialize(options = {})
       @options = options
       @subscriptions = Concurrent::Map.new
@@ -58,6 +54,5 @@ module SolidMCP
       listener = @listeners.delete(session_id)
       listener&.stop
     end
-    end # class PubSub
-  end # else
+  end # class PubSub
 end

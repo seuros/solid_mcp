@@ -2,7 +2,7 @@
 
 require "test_helper"
 
-class TestSolidMCP < Minitest::Test
+class TestSolidMCP < ActiveSupport::TestCase
   def test_that_it_has_a_version_number
     refute_nil ::SolidMCP::VERSION
   end

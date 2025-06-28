@@ -3,7 +3,7 @@
 require "test_helper"
 
 module SolidMCP
-  class SSEResumabilityTest < Minitest::Test
+  class SSEResumabilityTest < ActiveSupport::TestCase
     def setup
       SolidMCP::Message.delete_all
       @session_id = "sse-test-session"
@@ -135,6 +135,9 @@ module SolidMCP
       pubsub.broadcast(@session_id, "message", "Event 1")
       pubsub.broadcast(@session_id, "message", "Event 2")
       
+      # Ensure messages are written to database
+      MessageWriter.instance.flush
+      
       # Wait for delivery
       assert wait_for_condition { received_events.size == 2 }
       
@@ -153,7 +156,7 @@ module SolidMCP
       reconnect_events = []
       pubsub.subscribe(@session_id) do |message|
         # In real SSE, we'd check if message[:id] > disconnect_checkpoint
-        reconnect_events << message if message[:id] > disconnect_checkpoint
+        reconnect_events << message if message[:id] && disconnect_checkpoint && message[:id] > disconnect_checkpoint
       end
       
       # Wait a bit for subscription to catch up

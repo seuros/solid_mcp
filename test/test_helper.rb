@@ -7,30 +7,43 @@ ENV["RAILS_ENV"] = "test"
 
 require "active_record"
 require "active_job"
+require "active_support/test_case"
 require "minitest/autorun"
 require "solid_mcp"
 
-# Set up in-memory SQLite database for testing
-ActiveRecord::Base.establish_connection(
-  adapter: "sqlite3",
-  database: ":memory:"
-)
+# Global flag to track if database has been initialized
+$solid_mcp_test_db_initialized ||= false
 
-# Create the messages table
-ActiveRecord::Schema.define do
-  create_table :solid_mcp_messages do |t|
-    t.string :session_id, null: false, limit: 36
-    t.string :event_type, null: false, limit: 50
-    t.text :data
-    t.datetime :created_at, null: false
-    t.datetime :delivered_at
-    
-    t.index [:session_id, :id], name: 'idx_solid_mcp_messages_on_session_and_id'
-    t.index [:delivered_at, :created_at], name: 'idx_solid_mcp_messages_on_delivered_and_created'
+unless $solid_mcp_test_db_initialized
+  # Use shared memory SQLite database for better thread visibility
+  ActiveRecord::Base.establish_connection(
+    adapter: "sqlite3",
+    database: "file:solid_mcp_test?mode=memory&cache=shared",
+    pool: 10,  # Increase pool size for multiple threads
+    timeout: 5000
+  )
+
+  # Create the messages table
+  ActiveRecord::Schema.define do
+    create_table :solid_mcp_messages, force: true do |t|
+      t.string :session_id, null: false, limit: 36
+      t.string :event_type, null: false, limit: 50
+      t.text :data
+      t.datetime :created_at, null: false
+      t.datetime :delivered_at
+      
+      t.index [:session_id, :id], name: 'idx_solid_mcp_messages_on_session_and_id'
+      t.index [:delivered_at, :created_at], name: 'idx_solid_mcp_messages_on_delivered_and_created'
+    end
   end
+  
+  # Mark as initialized
+  $solid_mcp_test_db_initialized = true
 end
 
-# Model is loaded automatically by the gem
+# Load the app/models directory
+$LOAD_PATH.unshift File.expand_path("../app/models", __dir__)
+require "solid_mcp/message"
 
 # Test helper methods
 module SolidMCP
@@ -64,6 +77,6 @@ module SolidMCP
   end
 end
 
-class Minitest::Test
+class ActiveSupport::TestCase
   include SolidMCP::TestHelper
 end

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "concurrent/atomic/atomic_boolean"
+require "concurrent/timer_task"
 
 module SolidMCP
   class Subscriber
@@ -8,38 +9,62 @@ module SolidMCP
       @session_id = session_id
       @callbacks = callbacks
       @running = Concurrent::AtomicBoolean.new(false)
-      @thread = nil
       @last_message_id = 0
+      @timer_task = nil
+      @max_retries = ENV["RAILS_ENV"] == "test" ? 3 : Float::INFINITY
+      @retry_count = 0
     end
 
     def start
       return if @running.true?
 
       @running.make_true
-      @thread = Thread.new { poll_loop }
+      @retry_count = 0
+      
+      @timer_task = Concurrent::TimerTask.new(
+        execution_interval: SolidMCP.configuration.polling_interval,
+        timeout_interval: 30,
+        run_now: true
+      ) do
+        poll_once
+      end
+      
+      @timer_task.execute
     end
 
     def stop
       @running.make_false
-      @thread&.join
+      @timer_task&.shutdown
+      @timer_task&.wait_for_termination(5)
     end
 
     private
 
-    def poll_loop
-      while @running.true?
-        messages = fetch_new_messages
+    def poll_once
+      return unless @running.true?
+      
+      # Ensure connection in thread
+      ActiveRecord::Base.connection_pool.with_connection do
+        # In test environment, ensure schema is visible to this thread
+        if ENV["RAILS_ENV"] == "test" && defined?(SolidMCP::ThreadDatabaseHelper)
+          SolidMCP::ThreadDatabaseHelper.ensure_schema_visible
+        end
         
+        messages = fetch_new_messages
         if messages.any?
           process_messages(messages)
           mark_delivered(messages)
-        else
-          sleep SolidMCP.configuration.polling_interval
+          @retry_count = 0
         end
       end
     rescue => e
-      Rails.logger.error "SolidMCP::Subscriber error for session #{@session_id}: #{e.message}" if defined?(Rails)
-      retry if @running.true?
+      @retry_count += 1
+      SolidMCP::Logger.error "SolidMCP::Subscriber error for session #{@session_id}: #{e.message} (retry #{@retry_count}/#{@max_retries})"
+      
+      if @retry_count >= @max_retries && @max_retries != Float::INFINITY
+        SolidMCP::Logger.error "SolidMCP::Subscriber max retries reached for session #{@session_id}, stopping"
+        stop
+      end
     end
 
     def fetch_new_messages
@@ -57,11 +82,11 @@ module SolidMCP
         @callbacks.each do |callback|
           callback.call({
             event_type: message.event_type,
-            data: message.data,
+            data: message.data,  # data is already a JSON string from the database
             id: message.id
           })
         rescue => e
-          Rails.logger.error "SolidMCP callback error: #{e.message}" if defined?(Rails)
+          SolidMCP::Logger.error "SolidMCP callback error: #{e.message}"
         end
         @last_message_id = message.id
       end
