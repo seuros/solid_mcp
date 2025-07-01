@@ -6,6 +6,7 @@ require "rails/generators/active_record"
 module SolidMCP
   module Generators
     class InstallGenerator < Rails::Generators::Base
+      namespace "solid_mcp:install"
       include ActiveRecord::Generators::Migration
 
       source_root File.expand_path("templates", __dir__)
