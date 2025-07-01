@@ -1,0 +1,15 @@
+development:
+  primary:
+    adapter: sqlite3
+    database: db/development.sqlite3
+    timeout: 5000
+    busy_timeout: 5000
+    url: nil
+
+test:
+  primary:
+    adapter: sqlite3
+    database: ":memory:"
+    timeout: 5000
+    busy_timeout: 5000
+    url: nil
