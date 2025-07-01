@@ -12,7 +12,7 @@ Gem::Specification.new do |spec|
   spec.description   = "SolidMCP implements a high-performance, bidirectional Pub/Sub transport for ActionMCP."
   spec.homepage      = "https://github.com/seuros/solid_mcp"
   spec.license       = "MIT"
-  spec.required_ruby_version = ">= 3.4.4"
+  spec.required_ruby_version = ">= 3.4.0"
 
   spec.metadata["homepage_uri"]     = spec.homepage
   spec.metadata["source_code_uri"]  = "https://github.com/seuros/solid_mcp"
