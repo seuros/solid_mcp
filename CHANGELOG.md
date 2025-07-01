@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+## [0.2.3](https://github.com/seuros/solid_mcp/compare/solid_mcp/v0.2.2...solid_mcp/v0.2.3) (2025-07-01)
+
+
+### Bug Fixes
+
+* relax version requirement ([27b6ed6](https://github.com/seuros/solid_mcp/commit/27b6ed6e8aa0340f61517e76dba5cbe38b68b6ba))
+
 ## [0.2.2](https://github.com/seuros/solid_mcp/compare/solid_mcp/v0.2.1...solid_mcp/v0.2.2) (2025-07-01)
 
 
