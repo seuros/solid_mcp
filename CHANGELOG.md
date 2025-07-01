@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+## [0.2.2](https://github.com/seuros/solid_mcp/compare/solid_mcp/v0.2.1...solid_mcp/v0.2.2) (2025-07-01)
+
+
+### Bug Fixes
+
+* override generator namespace to prevent zeitwerk naming issues ([beadfc5](https://github.com/seuros/solid_mcp/commit/beadfc55d73d7446ed6c05db46ef16ef4ef79886))
+
 ## [0.2.1](https://github.com/seuros/solid_mcp/compare/solid_mcp/v0.2.0...solid_mcp/v0.2.1) (2025-07-01)
 
 
