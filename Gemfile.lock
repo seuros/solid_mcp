@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    solid_mcp (0.0.1)
+    solid_mcp (0.2.0)
       activejob (>= 8.0)
       activerecord (>= 8.0)
       concurrent-ruby (~> 1.0)
