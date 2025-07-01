@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+## [0.2.1](https://github.com/seuros/solid_mcp/compare/solid_mcp/v0.2.0...solid_mcp/v0.2.1) (2025-07-01)
+
+
+### Bug Fixes
+
+* add issues permission to release workflow ([dd6d90d](https://github.com/seuros/solid_mcp/commit/dd6d90d5d3e87987c80215401bc422abf02da1b0))
+* add issues permission to release workflow ([1105f92](https://github.com/seuros/solid_mcp/commit/1105f926d1266f107dad80839c1ae7bd178f8bd0))
+
 ## [0.2.0](https://github.com/seuros/solid_mcp/compare/solid_mcp-v0.1.0...solid_mcp/v0.2.0) (2025-07-01)
 
 
