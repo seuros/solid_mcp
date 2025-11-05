@@ -13,9 +13,10 @@ module SolidMCP
 
     # Subscribe to messages for a specific session
     def subscribe(session_id, &block)
-      @subscriptions[session_id] ||= Concurrent::Array.new
-      @subscriptions[session_id] << block
-      
+      # Atomically get or create callbacks array
+      callbacks = @subscriptions.compute_if_absent(session_id) { Concurrent::Array.new }
+      callbacks << block
+
       # Start a listener for this session if not already running
       ensure_listener_for(session_id)
     end
@@ -43,11 +44,12 @@ module SolidMCP
     private
 
     def ensure_listener_for(session_id)
-      return if @listeners[session_id]
-
-      listener = Subscriber.new(session_id, @subscriptions[session_id])
-      listener.start
-      @listeners[session_id] = listener
+      # Atomically create and start listener only once
+      @listeners.compute_if_absent(session_id) do
+        listener = Subscriber.new(session_id, @subscriptions[session_id])
+        listener.start
+        listener
+      end
     end
 
     def stop_listener_for(session_id)
