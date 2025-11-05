@@ -6,15 +6,17 @@ require "concurrent"
 module SolidMCP
   class MessageWriter
     include Singleton
-    
+
     # Reset the singleton (for testing only)
     def self.reset!
       @singleton__instance__ = nil
     end
 
     def initialize
-      @queue = Queue.new
+      @queue = SizedQueue.new(SolidMCP.configuration.max_queue_size)
       @shutdown = Concurrent::AtomicBoolean.new(false)
+      @dropped_count = Concurrent::AtomicFixnum.new(0)
+      @worker_ready = Concurrent::CountDownLatch.new(1)
       @executor = Concurrent::ThreadPoolExecutor.new(
         min_threads: 1,
         max_threads: 1,  # Single thread for ordered writes
@@ -22,36 +24,68 @@ module SolidMCP
         fallback_policy: :caller_runs
       )
       start_worker
+      # Wait for worker thread to be ready (with short timeout)
+      # Using 0.1s is enough for worker to start, avoids 1s delay per test
+      @worker_ready.wait(0.1)
     end
 
-    # Called by publish API - non-blocking
+    # Called by publish API - non-blocking with backpressure
     def enqueue(session_id, event_type, data)
-      @queue << {
+      message = {
         session_id: session_id,
         event_type: event_type,
         data: data.is_a?(String) ? data : data.to_json,
-        created_at: Time.current
+        created_at: Time.now.utc
       }
+
+      # Try non-blocking push with backpressure
+      begin
+        @queue.push(message, true) # non-blocking
+        true
+      rescue ThreadError
+        # Queue full - drop message and log
+        @dropped_count.increment
+        SolidMCP::Logger.warn "SolidMCP queue full (#{SolidMCP.configuration.max_queue_size}), dropped message for session #{session_id}"
+        false
+      end
+    end
+
+    # Get count of dropped messages
+    def dropped_count
+      @dropped_count.value
     end
 
     # Blocks until executor has flushed everything
     def shutdown
-      # Process any remaining messages in the queue
-      flush if @executor.running?
-      
+      SolidMCP::Logger.info "SolidMCP::MessageWriter shutting down, #{@queue.size} messages pending"
+
+      # Mark as shutting down (worker will exit after draining queue)
       @shutdown.make_true
+
+      # Wait for executor to finish processing
       @executor.shutdown
-      @executor.wait_for_termination(10) # Wait up to 10 seconds
+      @executor.wait_for_termination(SolidMCP.configuration.shutdown_timeout)
+
+      if @queue.size > 0
+        SolidMCP::Logger.warn "SolidMCP::MessageWriter shutdown timeout, #{@queue.size} messages not written"
+      end
     end
 
     # Force flush any pending messages (useful for tests)
     def flush
       return unless @executor.running?
-      
+
       # Add a marker and wait for it to be processed
       processed = Concurrent::CountDownLatch.new(1)
-      @queue << { flush_marker: processed }
-      
+
+      # Use blocking push for flush marker (not subject to queue limits)
+      begin
+        @queue.push({ flush_marker: processed }, false) # blocking
+      rescue ThreadError
+        # Queue is shutting down
+        return
+      end
+
       # Wait up to 1 second for flush to complete
       processed.wait(1)
     end
@@ -71,6 +105,9 @@ module SolidMCP
     end
 
     def run_loop
+      # Signal that worker is ready
+      @worker_ready.count_down
+
       loop do
         break if @shutdown.true? && @queue.empty?
 
@@ -78,8 +115,6 @@ module SolidMCP
         if batch.any?
           SolidMCP::Logger.debug "MessageWriter processing batch of #{batch.size} messages" if ENV["DEBUG_SOLID_MCP"]
           write_batch(batch)
-        else
-          sleep SolidMCP.configuration.flush_interval
         end
       end
     rescue => e
@@ -92,25 +127,22 @@ module SolidMCP
       batch_size = SolidMCP.configuration.batch_size
       flush_markers = []
 
-      # Try to get first item (non-blocking)
-      begin
-        item = @queue.pop(true)
-        # Handle flush markers
-        if item.is_a?(Hash) && item[:flush_marker]
-          flush_markers << item[:flush_marker]
-        else
-          batch << item
-        end
-      rescue ThreadError
-        # Signal any flush markers we've collected
-        flush_markers.each(&:count_down)
-        return batch
+      # Get first item with timeout (blocking)
+      item = @queue.pop(false) rescue nil # blocking pop, returns nil on shutdown
+
+      return batch unless item
+
+      # Handle flush markers
+      if item.is_a?(Hash) && item[:flush_marker]
+        flush_markers << item[:flush_marker]
+      else
+        batch << item
       end
 
-      # Get remaining items up to batch size
+      # Get remaining items up to batch size (non-blocking)
       while batch.size < batch_size
         begin
-          item = @queue.pop(true)
+          item = @queue.pop(true) # non-blocking
           # Handle flush markers
           if item.is_a?(Hash) && item[:flush_marker]
             flush_markers << item[:flush_marker]
@@ -130,24 +162,17 @@ module SolidMCP
     def write_batch(batch)
       return if batch.empty?
 
-      # Use raw SQL for maximum performance
-      SolidMCP::Message.connection_pool.with_connection do |conn|
-        values = batch.map do |msg|
-          [
-            conn.quote(msg[:session_id]),
-            conn.quote(msg[:event_type]),
-            conn.quote(msg[:data]),
-            conn.quote(msg[:created_at].utc.to_fs(:db))
-          ].join(",")
-        end
-
-        sql = <<-SQL
-          INSERT INTO solid_mcp_messages (session_id, event_type, data, created_at)
-          VALUES #{values.map { |v| "(#{v})" }.join(",")}
-        SQL
-
-        conn.execute(sql)
+      # Use ActiveRecord insert_all for safety and database portability
+      records = batch.map do |msg|
+        {
+          session_id: msg[:session_id],
+          event_type: msg[:event_type],
+          data: msg[:data],
+          created_at: msg[:created_at]
+        }
       end
+
+      SolidMCP::Message.insert_all(records)
     rescue => e
       SolidMCP::Logger.error "SolidMCP::MessageWriter batch write error: #{e.message}"
       # Could implement retry logic or dead letter queue here

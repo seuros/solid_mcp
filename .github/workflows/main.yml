@@ -10,18 +10,25 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    name: Ruby ${{ matrix.ruby }}
+    name: Ruby ${{ matrix.ruby }} / Rails ${{ matrix.rails }}
     strategy:
       matrix:
         ruby:
-          - '3.4.4'
+          - '3.4.7'
+        rails:
+          - '8.0.4'
+          - '8.1.1'
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
-      - name: Run the default task
+        env:
+          RAILS_VERSION: ${{ matrix.rails }}
+      - name: Run tests
         run: bundle exec rake
+        env:
+          RAILS_VERSION: ${{ matrix.rails }}
