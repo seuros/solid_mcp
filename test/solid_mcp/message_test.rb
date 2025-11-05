@@ -10,7 +10,7 @@ module SolidMCP
 
     def test_required_fields
       message = Message.new
-      
+
       # Should require session_id and event_type
       assert_raises(ActiveRecord::NotNullViolation) do
         message.save!
@@ -24,7 +24,7 @@ module SolidMCP
         data: "Hello, World!",
         created_at: Time.current
       )
-      
+
       assert message.persisted?
       assert_equal "test-123", message.session_id
       assert_equal "message", message.event_type
@@ -35,7 +35,7 @@ module SolidMCP
     def test_scopes
       session1 = "scope-test-1"
       session2 = "scope-test-2"
-      
+
       # Create test data
       msg1 = Message.create!(
         session_id: session1,
@@ -43,7 +43,7 @@ module SolidMCP
         data: "1",
         created_at: Time.current
       )
-      
+
       msg2 = Message.create!(
         session_id: session1,
         event_type: "test",
@@ -51,31 +51,31 @@ module SolidMCP
         created_at: Time.current,
         delivered_at: Time.current
       )
-      
+
       msg3 = Message.create!(
         session_id: session2,
         event_type: "test",
         data: "3",
         created_at: Time.current
       )
-      
+
       # Test for_session scope
       session1_messages = Message.for_session(session1)
       assert_equal 2, session1_messages.count
       assert_includes session1_messages, msg1
       assert_includes session1_messages, msg2
-      
+
       # Test undelivered scope
       undelivered = Message.undelivered
       assert_equal 2, undelivered.count
       assert_includes undelivered, msg1
       assert_includes undelivered, msg3
-      
+
       # Test delivered scope
       delivered = Message.delivered
       assert_equal 1, delivered.count
       assert_equal msg2, delivered.first
-      
+
       # Test after_id scope
       after_first = Message.after_id(msg1.id)
       assert_equal 2, after_first.count
@@ -92,20 +92,18 @@ module SolidMCP
           created_at: Time.current
         )
       end
-      
+
       # Mark first two as delivered
       Message.mark_delivered([messages[0].id, messages[1].id])
-      
+
       messages.each(&:reload)
-      
+
       assert_not_nil messages[0].delivered_at
       assert_not_nil messages[1].delivered_at
       assert_nil messages[2].delivered_at
     end
 
     def test_cleanup_old_delivered
-      now = Time.current
-      
       # Create messages with different ages
       old_delivered = Message.create!(
         session_id: "cleanup-test",
@@ -114,7 +112,7 @@ module SolidMCP
         created_at: 2.hours.ago,
         delivered_at: 2.hours.ago
       )
-      
+
       recent_delivered = Message.create!(
         session_id: "cleanup-test",
         event_type: "recent",
@@ -122,16 +120,16 @@ module SolidMCP
         created_at: 30.minutes.ago,
         delivered_at: 30.minutes.ago
       )
-      
+
       # Old delivered scope
       old = Message.old_delivered(1.hour)
       assert_equal 1, old.count
       assert_equal old_delivered, old.first
-      
+
       # Cleanup
       count = Message.old_delivered(1.hour).delete_all
       assert_equal 1, count
-      
+
       # Recent should remain
       assert Message.exists?(recent_delivered.id)
       assert !Message.exists?(old_delivered.id)
@@ -145,23 +143,23 @@ module SolidMCP
         data: "old",
         created_at: 25.hours.ago
       )
-      
+
       recent_undelivered = Message.create!(
         session_id: "cleanup-test",
         event_type: "new",
         data: "recent",
         created_at: 1.hour.ago
       )
-      
+
       # Old undelivered scope
       old = Message.old_undelivered(24.hours)
       assert_equal 1, old.count
       assert_equal old_undelivered, old.first
-      
+
       # Cleanup
       count = Message.old_undelivered(24.hours).delete_all
       assert_equal 1, count
-      
+
       # Recent should remain
       assert Message.exists?(recent_undelivered.id)
       assert !Message.exists?(old_undelivered.id)
@@ -176,27 +174,27 @@ module SolidMCP
         created_at: 2.hours.ago,
         delivered_at: 2.hours.ago
       )
-      
+
       Message.create!(
         session_id: "cleanup",
         event_type: "old_undelivered",
         data: "2",
         created_at: 25.hours.ago
       )
-      
+
       recent = Message.create!(
         session_id: "cleanup",
         event_type: "recent",
         data: "3",
         created_at: 5.minutes.ago
       )
-      
+
       # Run cleanup
       Message.cleanup(
         delivered_retention: 1.hour,
         undelivered_retention: 24.hours
       )
-      
+
       # Only recent should remain
       remaining = Message.all
       assert_equal 1, remaining.count
@@ -211,9 +209,9 @@ module SolidMCP
         data: "test",
         created_at: Time.current
       )
-      
+
       assert message.valid?
-      
+
       # This would depend on database enforcement
       # Some databases truncate, others error
     end
@@ -226,7 +224,7 @@ module SolidMCP
         data: "test",
         created_at: Time.current
       )
-      
+
       assert message.valid?
     end
 
@@ -237,7 +235,7 @@ module SolidMCP
         data: nil,
         created_at: Time.current
       )
-      
+
       assert message.persisted?
       assert_nil message.data
     end
@@ -246,7 +244,7 @@ module SolidMCP
       # This is more of a schema test, but ensures our indexes are created
       indexes = ActiveRecord::Base.connection.indexes("solid_mcp_messages")
       index_names = indexes.map(&:name)
-      
+
       assert_includes index_names, "idx_solid_mcp_messages_on_session_and_id"
       assert_includes index_names, "idx_solid_mcp_messages_on_delivered_and_created"
     end

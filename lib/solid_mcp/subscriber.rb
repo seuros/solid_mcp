@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "concurrent/atomic/atomic_boolean"
+require "concurrent/atomic/atomic_reference"
 require "concurrent/timer_task"
 
 module SolidMCP
@@ -9,7 +10,7 @@ module SolidMCP
       @session_id = session_id
       @callbacks = callbacks
       @running = Concurrent::AtomicBoolean.new(false)
-      @last_message_id = 0
+      @last_message_id = Concurrent::AtomicReference.new(0)
       @timer_task = nil
       @max_retries = ENV["RAILS_ENV"] == "test" ? 3 : Float::INFINITY
       @retry_count = 0
@@ -20,14 +21,14 @@ module SolidMCP
 
       @running.make_true
       @retry_count = 0
-      
+
       @timer_task = Concurrent::TimerTask.new(
         execution_interval: SolidMCP.configuration.polling_interval,
         run_now: true
       ) do
         poll_once
       end
-      
+
       @timer_task.execute
     end
 
@@ -41,7 +42,7 @@ module SolidMCP
 
     def poll_once
       return unless @running.true?
-      
+
       # Ensure connection in thread
       SolidMCP::Message.connection_pool.with_connection do
         messages = fetch_new_messages
@@ -54,7 +55,7 @@ module SolidMCP
     rescue => e
       @retry_count += 1
       SolidMCP::Logger.error "SolidMCP::Subscriber error for session #{@session_id}: #{e.message} (retry #{@retry_count}/#{@max_retries})"
-      
+
       if @retry_count >= @max_retries && @max_retries != Float::INFINITY
         SolidMCP::Logger.error "SolidMCP::Subscriber max retries reached for session #{@session_id}, stopping"
         stop
@@ -65,7 +66,7 @@ module SolidMCP
       SolidMCP::Message
         .for_session(@session_id)
         .undelivered
-        .after_id(@last_message_id)
+        .after_id(@last_message_id.get)
         .order(:id)
         .limit(100)
         .to_a
@@ -73,6 +74,8 @@ module SolidMCP
 
     def process_messages(messages)
       messages.each do |message|
+        # Process all callbacks first
+        all_successful = true
         @callbacks.each do |callback|
           begin
             callback.call({
@@ -81,10 +84,18 @@ module SolidMCP
               id: message.id
             })
           rescue => e
+            all_successful = false
             SolidMCP::Logger.error "SolidMCP callback error: #{e.message}"
           end
         end
-        @last_message_id = message.id
+
+        # Only update last_message_id if all callbacks succeeded
+        if all_successful
+          @last_message_id.set(message.id)
+        else
+          # Stop processing remaining messages on first callback failure
+          break
+        end
       end
     end
 

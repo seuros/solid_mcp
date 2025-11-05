@@ -2,8 +2,9 @@
 
 module SolidMCP
   class Configuration
-    attr_accessor :batch_size, :flush_interval, :delivered_retention, 
-                  :undelivered_retention, :polling_interval, :max_wait_time, :logger
+    attr_accessor :batch_size, :flush_interval, :delivered_retention,
+                  :undelivered_retention, :polling_interval, :max_wait_time, :logger,
+                  :max_queue_size, :shutdown_timeout
 
     def initialize
       @batch_size = 200
@@ -12,6 +13,8 @@ module SolidMCP
       @max_wait_time = 30 # 30 seconds
       @delivered_retention = 3600 # 1 hour in seconds
       @undelivered_retention = 86400 # 24 hours in seconds
+      @max_queue_size = 10_000 # Maximum messages in memory queue
+      @shutdown_timeout = 30 # Maximum seconds to wait for graceful shutdown
       @logger = default_logger
     end
 

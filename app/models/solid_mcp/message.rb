@@ -13,13 +13,15 @@ module SolidMCP
 
     # Mark messages as delivered
     def self.mark_delivered(ids)
-      where(id: ids).update_all(delivered_at: Time.current)
+      where(id: ids).update_all(delivered_at: Time.now.utc)
     end
 
-    # Cleanup old messages
+    # Cleanup old messages with transaction safety
     def self.cleanup(delivered_retention: 1.hour, undelivered_retention: 24.hours)
-      old_delivered(delivered_retention).delete_all
-      old_undelivered(undelivered_retention).delete_all
+      transaction do
+        old_delivered(delivered_retention).delete_all
+        old_undelivered(undelivered_retention).delete_all
+      end
     end
   end
 end
