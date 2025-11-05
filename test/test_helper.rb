@@ -34,6 +34,12 @@ end
 # Include test helper in all tests
 class ActiveSupport::TestCase
   include SolidMCP::TestHelper
+
+  # Clear database and reset MessageWriter before each test
+  setup do
+    SolidMCP::Message.delete_all
+    SolidMCP::MessageWriter.reset!
+  end
 end
 
 # Ensure SolidMCP is configured for tests
