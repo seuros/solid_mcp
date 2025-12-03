@@ -1,0 +1,19 @@
+[package]
+name = "solid_mcp_native"
+version = "0.1.0"
+edition = "2024"
+authors = ["Abdelkader Boudih <terminale@gmail.com>"]
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+solid-mcp-core = { workspace = true }
+magnus = { version = "0.8", features = ["embed"] }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[build-dependencies]
+rb-sys = "0.9"

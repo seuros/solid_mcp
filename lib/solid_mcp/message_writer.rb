@@ -127,16 +127,16 @@ module SolidMCP
       batch_size = SolidMCP.configuration.batch_size
       flush_markers = []
 
-      # Get first item with timeout to allow shutdown
+      # Get first item - use blocking pop with timeout to avoid busy spin
       item = nil
-      loop do
-        break if @shutdown.true? && @queue.empty?
+      until @shutdown.true? && @queue.empty?
         begin
-          item = @queue.pop(true) # non-blocking
+          # Blocking pop with timeout allows clean shutdown checking
+          item = @queue.pop(timeout: 0.1)
           break if item
         rescue ThreadError
-          # Queue empty, check shutdown and retry
-          sleep 0.01 if !@shutdown.true?
+          # Queue closed, exit
+          break
         end
       end
 

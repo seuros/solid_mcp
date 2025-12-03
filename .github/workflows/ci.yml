@@ -1,0 +1,174 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Test the Rust crate independently
+  test-rust-crate:
+    runs-on: ubuntu-latest
+    name: Rust Crate Tests
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Check Rust formatting
+        run: |
+          cd ext/solid_mcp_native/core
+          cargo fmt --check
+
+      - name: Run Clippy
+        run: |
+          cd ext/solid_mcp_native/core
+          cargo clippy
+
+      - name: Build Rust crate
+        run: |
+          echo "::group::Building Rust crate"
+          cd ext/solid_mcp_native/core
+          time cargo build --release
+          echo "::endgroup::"
+
+      - name: Run Rust tests
+        run: |
+          echo "::group::Running Rust tests"
+          cd ext/solid_mcp_native/core
+          time cargo test --all
+          echo "::endgroup::"
+
+      - name: Check crate can be published
+        run: |
+          cd ext/solid_mcp_native/core
+          cargo package --allow-dirty
+
+  # Test with pure Ruby backend (no native extension)
+  test-ruby:
+    runs-on: ubuntu-latest
+    name: Ruby ${{ matrix.ruby }} / Rails ${{ matrix.rails }} (Pure Ruby)
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby:
+          - "3.4.7"
+        rails:
+          - "8.0.4"
+          - "8.1.1"
+    env:
+      RAILS_VERSION: ${{ matrix.rails }}
+      DISABLE_SOLID_MCP_NATIVE: "1"
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+
+      - name: Run tests (Pure Ruby)
+        run: |
+          echo "::group::Running tests with Pure Ruby backend"
+          time bundle exec rake test
+          echo "::endgroup::"
+
+      - name: Verify pure Ruby mode
+        run: |
+          bundle exec ruby -Ilib -e "
+            require 'active_job'
+            require 'solid_mcp'
+            if SolidMCP::NativeSpeedup.available?
+              puts '❌ ERROR: Native extension should not be available'
+              exit 1
+            else
+              puts '✅ Pure Ruby backend active'
+            end
+          "
+
+  # Test with native FFI backend
+  test-native:
+    runs-on: ubuntu-latest
+    name: Ruby ${{ matrix.ruby }} / Rails ${{ matrix.rails }} (Native FFI)
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby:
+          - "3.4.7"
+        rails:
+          - "8.0.4"
+          - "8.1.1"
+    env:
+      RAILS_VERSION: ${{ matrix.rails }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+
+      - name: Build native extension
+        run: |
+          echo "::group::Building native extension"
+          bundle exec rake compile
+          echo "::endgroup::"
+
+      - name: Run tests (Native FFI)
+        run: |
+          echo "::group::Running tests with Native FFI backend"
+          time bundle exec rake test
+          echo "::endgroup::"
+
+      - name: Verify native mode
+        run: |
+          bundle exec ruby -Ilib -e "
+            require 'active_job'
+            require 'solid_mcp'
+            if SolidMCP::NativeSpeedup.available?
+              puts '✅ Native FFI backend active'
+              puts 'Version: ' + SolidMCP::NativeSpeedup.version.to_s
+            else
+              puts '❌ ERROR: Native extension should be available'
+              exit 1
+            end
+          "
