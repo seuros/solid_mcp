@@ -18,6 +18,8 @@ pub struct PostgresPool {
 
 impl PostgresPool {
     /// Create a new PostgreSQL pool from a database URL
+    ///
+    /// The database and tables must already exist (created by Ruby migrations).
     pub async fn new(database_url: &str) -> Result<Self> {
         let options = PgConnectOptions::from_str(database_url)?;
 
@@ -27,86 +29,10 @@ impl PostgresPool {
             .connect_with(options)
             .await?;
 
-        let this = Self {
+        Ok(Self {
             pool,
             database_url: database_url.to_string(),
-        };
-        this.migrate().await?;
-
-        Ok(this)
-    }
-
-    /// Run database migrations
-    async fn migrate(&self) -> Result<()> {
-        sqlx::query(
-            r#"
-            CREATE TABLE IF NOT EXISTS solid_mcp_messages (
-                id BIGSERIAL PRIMARY KEY,
-                session_id VARCHAR(36) NOT NULL,
-                event_type VARCHAR(50) NOT NULL,
-                data TEXT NOT NULL,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                delivered_at TIMESTAMPTZ
-            )
-            "#,
-        )
-        .execute(&self.pool)
-        .await?;
-
-        // Create indexes
-        sqlx::query(
-            r#"
-            CREATE INDEX IF NOT EXISTS idx_solid_mcp_messages_session_id
-            ON solid_mcp_messages(session_id, id)
-            "#,
-        )
-        .execute(&self.pool)
-        .await?;
-
-        sqlx::query(
-            r#"
-            CREATE INDEX IF NOT EXISTS idx_solid_mcp_messages_delivered
-            ON solid_mcp_messages(delivered_at, created_at)
-            "#,
-        )
-        .execute(&self.pool)
-        .await?;
-
-        // Create NOTIFY trigger for real-time updates
-        sqlx::query(
-            r#"
-            CREATE OR REPLACE FUNCTION solid_mcp_notify()
-            RETURNS TRIGGER AS $$
-            BEGIN
-                PERFORM pg_notify('solid_mcp_' || NEW.session_id, NEW.id::text);
-                RETURN NEW;
-            END;
-            $$ LANGUAGE plpgsql
-            "#,
-        )
-        .execute(&self.pool)
-        .await?;
-
-        // Create trigger if not exists (PostgreSQL doesn't have IF NOT EXISTS for triggers)
-        sqlx::query(
-            r#"
-            DO $$
-            BEGIN
-                IF NOT EXISTS (
-                    SELECT 1 FROM pg_trigger WHERE tgname = 'solid_mcp_insert_trigger'
-                ) THEN
-                    CREATE TRIGGER solid_mcp_insert_trigger
-                    AFTER INSERT ON solid_mcp_messages
-                    FOR EACH ROW
-                    EXECUTE FUNCTION solid_mcp_notify();
-                END IF;
-            END $$
-            "#,
-        )
-        .execute(&self.pool)
-        .await?;
-
-        Ok(())
+        })
     }
 
     /// Create a LISTEN connection for a session

@@ -15,10 +15,11 @@ pub struct SqlitePool {
 
 impl SqlitePool {
     /// Create a new SQLite pool from a database URL
+    ///
+    /// The database and tables must already exist (created by Ruby migrations).
     pub async fn new(database_url: &str) -> Result<Self> {
         // Parse the URL and configure for WAL mode (better concurrency)
         let options = SqliteConnectOptions::from_str(database_url)?
-            .create_if_missing(true)
             .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
             .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
             .busy_timeout(Duration::from_secs(30));
@@ -28,15 +29,12 @@ impl SqlitePool {
             .connect_with(options)
             .await?;
 
-        // Run migrations
-        let this = Self { pool };
-        this.migrate().await?;
-
-        Ok(this)
+        Ok(Self { pool })
     }
 
-    /// Run database migrations
-    async fn migrate(&self) -> Result<()> {
+    /// Create tables for testing purposes only
+    #[cfg(test)]
+    pub(crate) async fn setup_test_schema(&self) -> Result<()> {
         sqlx::query(
             r#"
             CREATE TABLE IF NOT EXISTS solid_mcp_messages (
@@ -52,7 +50,6 @@ impl SqlitePool {
         .execute(&self.pool)
         .await?;
 
-        // Create indexes
         sqlx::query(
             r#"
             CREATE INDEX IF NOT EXISTS idx_solid_mcp_messages_session_id
@@ -231,15 +228,21 @@ mod tests {
     use super::*;
     use crate::db::Database;
 
+    async fn create_test_pool() -> SqlitePool {
+        let pool = SqlitePool::new("sqlite::memory:").await.unwrap();
+        pool.setup_test_schema().await.unwrap();
+        pool
+    }
+
     #[tokio::test]
     async fn test_sqlite_pool_creation() {
-        let pool = SqlitePool::new("sqlite::memory:").await.unwrap();
+        let pool = create_test_pool().await;
         assert_eq!(pool.max_id().await.unwrap(), 0);
     }
 
     #[tokio::test]
     async fn test_insert_and_fetch() {
-        let pool = SqlitePool::new("sqlite::memory:").await.unwrap();
+        let pool = create_test_pool().await;
 
         let messages = vec![
             Message::new("session-1", "message", r#"{"test":1}"#),
@@ -256,7 +259,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_mark_delivered() {
-        let pool = SqlitePool::new("sqlite::memory:").await.unwrap();
+        let pool = create_test_pool().await;
 
         let messages = vec![Message::new("session-1", "message", r#"{}"#)];
         pool.insert_batch(&messages).await.unwrap();

@@ -260,10 +260,15 @@ mod tests {
     use crate::db::sqlite::SqlitePool;
     use std::sync::atomic::AtomicUsize;
 
+    async fn create_test_db() -> Arc<DbPool> {
+        let sqlite = SqlitePool::new("sqlite::memory:").await.unwrap();
+        sqlite.setup_test_schema().await.unwrap();
+        Arc::new(DbPool::Sqlite(sqlite))
+    }
+
     #[tokio::test]
     async fn test_polling_subscriber() {
-        let sqlite = SqlitePool::new("sqlite::memory:").await.unwrap();
-        let db = Arc::new(DbPool::Sqlite(sqlite));
+        let db = create_test_db().await;
         let config = Config::new("sqlite::memory:").polling_interval(Duration::from_millis(10));
 
         let received = Arc::new(AtomicUsize::new(0));

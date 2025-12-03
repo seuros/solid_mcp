@@ -183,8 +183,16 @@ impl PubSub {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::sqlite::SqlitePool;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
+
+    async fn create_test_pubsub(config: Config) -> PubSub {
+        let sqlite = SqlitePool::new("sqlite::memory:").await.unwrap();
+        sqlite.setup_test_schema().await.unwrap();
+        let db = Arc::new(DbPool::Sqlite(sqlite));
+        PubSub::with_db(db, config).await.unwrap()
+    }
 
     #[tokio::test]
     async fn test_pubsub_basic() {
@@ -192,7 +200,7 @@ mod tests {
             .batch_size(10)
             .polling_interval(Duration::from_millis(10));
 
-        let pubsub = PubSub::new(config).await.unwrap();
+        let pubsub = create_test_pubsub(config).await;
 
         let received = Arc::new(AtomicUsize::new(0));
         let received_clone = received.clone();
@@ -227,7 +235,7 @@ mod tests {
     async fn test_pubsub_multiple_sessions() {
         let config = Config::new("sqlite::memory:").polling_interval(Duration::from_millis(10));
 
-        let pubsub = PubSub::new(config).await.unwrap();
+        let pubsub = create_test_pubsub(config).await;
 
         let received1 = Arc::new(AtomicUsize::new(0));
         let received2 = Arc::new(AtomicUsize::new(0));
@@ -273,7 +281,7 @@ mod tests {
     async fn test_pubsub_unsubscribe() {
         let config = Config::new("sqlite::memory:").polling_interval(Duration::from_millis(10));
 
-        let pubsub = PubSub::new(config).await.unwrap();
+        let pubsub = create_test_pubsub(config).await;
 
         let received = Arc::new(AtomicUsize::new(0));
         let r = received.clone();

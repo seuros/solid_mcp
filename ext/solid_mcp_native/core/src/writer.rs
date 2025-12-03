@@ -199,10 +199,15 @@ mod tests {
     use super::*;
     use crate::db::sqlite::SqlitePool;
 
+    async fn create_test_db() -> Arc<DbPool> {
+        let sqlite = SqlitePool::new("sqlite::memory:").await.unwrap();
+        sqlite.setup_test_schema().await.unwrap();
+        Arc::new(DbPool::Sqlite(sqlite))
+    }
+
     #[tokio::test]
     async fn test_writer_basic() {
-        let sqlite = SqlitePool::new("sqlite::memory:").await.unwrap();
-        let db = Arc::new(DbPool::Sqlite(sqlite));
+        let db = create_test_db().await;
         let config = Config::new("sqlite::memory:").batch_size(10);
 
         let writer = MessageWriter::new(db.clone(), &config).await.unwrap();
@@ -226,8 +231,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_writer_batching() {
-        let sqlite = SqlitePool::new("sqlite::memory:").await.unwrap();
-        let db = Arc::new(DbPool::Sqlite(sqlite));
+        let db = create_test_db().await;
         let config = Config::new("sqlite::memory:").batch_size(3);
 
         let writer = MessageWriter::new(db.clone(), &config).await.unwrap();

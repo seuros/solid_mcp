@@ -48,6 +48,8 @@ pub enum DbPool {
 
 impl DbPool {
     /// Create a new database pool from config
+    ///
+    /// The database and tables must already exist (created by Ruby migrations).
     pub async fn new(config: &Config) -> Result<Self> {
         #[cfg(feature = "postgres")]
         if config.is_postgres() {
@@ -72,6 +74,20 @@ impl DbPool {
     /// Check if this is a PostgreSQL pool (supports LISTEN/NOTIFY)
     pub fn is_postgres(&self) -> bool {
         matches!(self, Self::Postgres(_))
+    }
+
+    /// Create tables for testing purposes only
+    #[cfg(test)]
+    pub(crate) async fn setup_test_schema(&self) -> Result<()> {
+        match self {
+            #[cfg(feature = "sqlite")]
+            Self::Sqlite(pool) => pool.setup_test_schema().await,
+            #[cfg(feature = "postgres")]
+            Self::Postgres(_) => {
+                // PostgreSQL tests require pre-existing schema
+                Ok(())
+            }
+        }
     }
 }
 
