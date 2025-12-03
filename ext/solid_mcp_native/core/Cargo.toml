@@ -2,10 +2,11 @@
 name = "solid-mcp-core"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.85"
 authors = ["Abdelkader Boudih <terminale@gmail.com>"]
 license = "MIT"
-description = "High-performance async pub/sub engine for MCP (Model Context Protocol)"
 repository = "https://github.com/seuros/solid_mcp"
+description = "High-performance async pub/sub engine for MCP (Model Context Protocol)"
 keywords = ["mcp", "pub-sub", "async", "tokio"]
 categories = ["asynchronous", "database"]
 

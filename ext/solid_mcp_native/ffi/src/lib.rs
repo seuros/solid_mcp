@@ -30,6 +30,11 @@ fn get_runtime() -> &'static Runtime {
     })
 }
 
+/// Helper to create a runtime error
+fn runtime_error(msg: impl Into<String>) -> Error {
+    Error::new(Ruby::get().unwrap().exception_runtime_error(), msg.into())
+}
+
 /// Initialize the pub/sub engine with a database URL
 fn init_engine(database_url: String) -> Result<bool, Error> {
     // Initialize tracing if DEBUG env var is set
@@ -46,7 +51,7 @@ fn init_engine(database_url: String) -> Result<bool, Error> {
 
     let pubsub = rt
         .block_on(async { PubSub::new(config).await })
-        .map_err(|e| Error::new(magnus::exception::runtime_error(), e.to_string()))?;
+        .map_err(|e| runtime_error(e.to_string()))?;
 
     PUBSUB.with(|ps| {
         *ps.borrow_mut() = Some(Arc::new(pubsub));
@@ -71,7 +76,7 @@ fn init_engine_with_config(
 
     let pubsub = rt
         .block_on(async { PubSub::new(config).await })
-        .map_err(|e| Error::new(magnus::exception::runtime_error(), e.to_string()))?;
+        .map_err(|e| runtime_error(e.to_string()))?;
 
     PUBSUB.with(|ps| {
         *ps.borrow_mut() = Some(Arc::new(pubsub));
@@ -85,12 +90,12 @@ fn broadcast(session_id: String, event_type: String, data: String) -> Result<boo
     PUBSUB.with(|ps| {
         let ps = ps.borrow();
         let pubsub = ps.as_ref().ok_or_else(|| {
-            Error::new(magnus::exception::runtime_error(), "Engine not initialized")
+            runtime_error("Engine not initialized")
         })?;
 
         pubsub
             .broadcast(&session_id, &event_type, &data)
-            .map_err(|e| Error::new(magnus::exception::runtime_error(), e.to_string()))
+            .map_err(|e| runtime_error(e.to_string()))
     })
 }
 
@@ -101,11 +106,11 @@ fn flush() -> Result<bool, Error> {
     PUBSUB.with(|ps| {
         let ps = ps.borrow();
         let pubsub = ps.as_ref().ok_or_else(|| {
-            Error::new(magnus::exception::runtime_error(), "Engine not initialized")
+            runtime_error("Engine not initialized")
         })?;
 
         rt.block_on(async { pubsub.flush().await })
-            .map_err(|e| Error::new(magnus::exception::runtime_error(), e.to_string()))?;
+            .map_err(|e| runtime_error(e.to_string()))?;
 
         Ok(true)
     })
@@ -118,11 +123,11 @@ fn mark_delivered(ids: Vec<i64>) -> Result<bool, Error> {
     PUBSUB.with(|ps| {
         let ps = ps.borrow();
         let pubsub = ps.as_ref().ok_or_else(|| {
-            Error::new(magnus::exception::runtime_error(), "Engine not initialized")
+            runtime_error("Engine not initialized")
         })?;
 
         rt.block_on(async { pubsub.mark_delivered(&ids).await })
-            .map_err(|e| Error::new(magnus::exception::runtime_error(), e.to_string()))?;
+            .map_err(|e| runtime_error(e.to_string()))?;
 
         Ok(true)
     })
@@ -136,12 +141,12 @@ fn cleanup() -> Result<Vec<u64>, Error> {
     PUBSUB.with(|ps| {
         let ps = ps.borrow();
         let pubsub = ps.as_ref().ok_or_else(|| {
-            Error::new(magnus::exception::runtime_error(), "Engine not initialized")
+            runtime_error("Engine not initialized")
         })?;
 
         let (delivered, undelivered) = rt
             .block_on(async { pubsub.cleanup().await })
-            .map_err(|e| Error::new(magnus::exception::runtime_error(), e.to_string()))?;
+            .map_err(|e| runtime_error(e.to_string()))?;
 
         Ok(vec![delivered, undelivered])
     })
@@ -186,7 +191,7 @@ fn subscription_count() -> Result<usize, Error> {
     PUBSUB.with(|ps| {
         let ps = ps.borrow();
         let pubsub = ps.as_ref().ok_or_else(|| {
-            Error::new(magnus::exception::runtime_error(), "Engine not initialized")
+            runtime_error("Engine not initialized")
         })?;
 
         Ok(rt.block_on(async { pubsub.subscription_count().await }))
