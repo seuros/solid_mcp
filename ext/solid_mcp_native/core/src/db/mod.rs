@@ -18,7 +18,12 @@ pub trait Database: Send + Sync + 'static {
     async fn insert_batch(&self, messages: &[Message]) -> Result<()>;
 
     /// Fetch undelivered messages for a session after the given ID
-    async fn fetch_after(&self, session_id: &str, after_id: i64, limit: i64) -> Result<Vec<Message>>;
+    async fn fetch_after(
+        &self,
+        session_id: &str,
+        after_id: i64,
+        limit: i64,
+    ) -> Result<Vec<Message>>;
 
     /// Mark messages as delivered
     async fn mark_delivered(&self, ids: &[i64]) -> Result<()>;
@@ -46,12 +51,16 @@ impl DbPool {
     pub async fn new(config: &Config) -> Result<Self> {
         #[cfg(feature = "postgres")]
         if config.is_postgres() {
-            return Ok(Self::Postgres(postgres::PostgresPool::new(&config.database_url).await?));
+            return Ok(Self::Postgres(
+                postgres::PostgresPool::new(&config.database_url).await?,
+            ));
         }
 
         #[cfg(feature = "sqlite")]
         if config.is_sqlite() {
-            return Ok(Self::Sqlite(sqlite::SqlitePool::new(&config.database_url).await?));
+            return Ok(Self::Sqlite(
+                sqlite::SqlitePool::new(&config.database_url).await?,
+            ));
         }
 
         Err(crate::Error::Config(format!(
@@ -77,7 +86,12 @@ impl Database for DbPool {
         }
     }
 
-    async fn fetch_after(&self, session_id: &str, after_id: i64, limit: i64) -> Result<Vec<Message>> {
+    async fn fetch_after(
+        &self,
+        session_id: &str,
+        after_id: i64,
+        limit: i64,
+    ) -> Result<Vec<Message>> {
         match self {
             #[cfg(feature = "sqlite")]
             Self::Sqlite(pool) => pool.fetch_after(session_id, after_id, limit).await,

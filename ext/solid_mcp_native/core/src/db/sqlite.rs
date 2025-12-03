@@ -140,8 +140,8 @@ impl super::Database for SqlitePool {
 
         let messages = rows
             .into_iter()
-            .map(|(id, session_id, event_type, data, created_at, delivered_at)| {
-                Message {
+            .map(
+                |(id, session_id, event_type, data, created_at, delivered_at)| Message {
                     id,
                     session_id,
                     event_type,
@@ -154,8 +154,8 @@ impl super::Database for SqlitePool {
                             .ok()
                             .map(|dt| dt.with_timezone(&chrono::Utc))
                     }),
-                }
-            })
+                },
+            )
             .collect();
 
         Ok(messages)
@@ -218,10 +218,9 @@ impl super::Database for SqlitePool {
     }
 
     async fn max_id(&self) -> Result<i64> {
-        let row: (Option<i64>,) =
-            sqlx::query_as("SELECT MAX(id) FROM solid_mcp_messages")
-                .fetch_one(&self.pool)
-                .await?;
+        let row: (Option<i64>,) = sqlx::query_as("SELECT MAX(id) FROM solid_mcp_messages")
+            .fetch_one(&self.pool)
+            .await?;
 
         Ok(row.0.unwrap_or(0))
     }

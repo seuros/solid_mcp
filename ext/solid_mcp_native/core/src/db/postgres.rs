@@ -180,14 +180,16 @@ impl super::Database for PostgresPool {
 
         let messages = rows
             .into_iter()
-            .map(|(id, session_id, event_type, data, created_at, delivered_at)| Message {
-                id,
-                session_id,
-                event_type,
-                data,
-                created_at,
-                delivered_at,
-            })
+            .map(
+                |(id, session_id, event_type, data, created_at, delivered_at)| Message {
+                    id,
+                    session_id,
+                    event_type,
+                    data,
+                    created_at,
+                    delivered_at,
+                },
+            )
             .collect();
 
         Ok(messages)
@@ -245,10 +247,9 @@ impl super::Database for PostgresPool {
     }
 
     async fn max_id(&self) -> Result<i64> {
-        let row: (Option<i64>,) =
-            sqlx::query_as("SELECT MAX(id) FROM solid_mcp_messages")
-                .fetch_one(&self.pool)
-                .await?;
+        let row: (Option<i64>,) = sqlx::query_as("SELECT MAX(id) FROM solid_mcp_messages")
+            .fetch_one(&self.pool)
+            .await?;
 
         Ok(row.0.unwrap_or(0))
     }
@@ -307,9 +308,8 @@ mod tests {
     #[tokio::test]
     #[ignore] // Requires PostgreSQL
     async fn test_postgres_pool_creation() {
-        let url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
-            "postgres://localhost/test_solid_mcp".to_string()
-        });
+        let url = std::env::var("DATABASE_URL")
+            .unwrap_or_else(|_| "postgres://localhost/test_solid_mcp".to_string());
         let pool = PostgresPool::new(&url).await.unwrap();
         let _ = pool.max_id().await.unwrap();
     }

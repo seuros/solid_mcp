@@ -2,7 +2,7 @@
 //!
 //! Exposes the Rust pub/sub engine to Ruby via Magnus.
 
-use magnus::{function, Error, Ruby};
+use magnus::{Error, Ruby, function};
 use solid_mcp_core::{Config, PubSub};
 use std::cell::RefCell;
 use std::sync::{Arc, OnceLock};
@@ -84,9 +84,9 @@ fn init_engine_with_config(
 fn broadcast(session_id: String, event_type: String, data: String) -> Result<bool, Error> {
     PUBSUB.with(|ps| {
         let ps = ps.borrow();
-        let pubsub = ps
-            .as_ref()
-            .ok_or_else(|| Error::new(magnus::exception::runtime_error(), "Engine not initialized"))?;
+        let pubsub = ps.as_ref().ok_or_else(|| {
+            Error::new(magnus::exception::runtime_error(), "Engine not initialized")
+        })?;
 
         pubsub
             .broadcast(&session_id, &event_type, &data)
@@ -100,9 +100,9 @@ fn flush() -> Result<bool, Error> {
 
     PUBSUB.with(|ps| {
         let ps = ps.borrow();
-        let pubsub = ps
-            .as_ref()
-            .ok_or_else(|| Error::new(magnus::exception::runtime_error(), "Engine not initialized"))?;
+        let pubsub = ps.as_ref().ok_or_else(|| {
+            Error::new(magnus::exception::runtime_error(), "Engine not initialized")
+        })?;
 
         rt.block_on(async { pubsub.flush().await })
             .map_err(|e| Error::new(magnus::exception::runtime_error(), e.to_string()))?;
@@ -117,9 +117,9 @@ fn mark_delivered(ids: Vec<i64>) -> Result<bool, Error> {
 
     PUBSUB.with(|ps| {
         let ps = ps.borrow();
-        let pubsub = ps
-            .as_ref()
-            .ok_or_else(|| Error::new(magnus::exception::runtime_error(), "Engine not initialized"))?;
+        let pubsub = ps.as_ref().ok_or_else(|| {
+            Error::new(magnus::exception::runtime_error(), "Engine not initialized")
+        })?;
 
         rt.block_on(async { pubsub.mark_delivered(&ids).await })
             .map_err(|e| Error::new(magnus::exception::runtime_error(), e.to_string()))?;
@@ -135,9 +135,9 @@ fn cleanup() -> Result<Vec<u64>, Error> {
 
     PUBSUB.with(|ps| {
         let ps = ps.borrow();
-        let pubsub = ps
-            .as_ref()
-            .ok_or_else(|| Error::new(magnus::exception::runtime_error(), "Engine not initialized"))?;
+        let pubsub = ps.as_ref().ok_or_else(|| {
+            Error::new(magnus::exception::runtime_error(), "Engine not initialized")
+        })?;
 
         let (delivered, undelivered) = rt
             .block_on(async { pubsub.cleanup().await })
@@ -185,9 +185,9 @@ fn subscription_count() -> Result<usize, Error> {
 
     PUBSUB.with(|ps| {
         let ps = ps.borrow();
-        let pubsub = ps
-            .as_ref()
-            .ok_or_else(|| Error::new(magnus::exception::runtime_error(), "Engine not initialized"))?;
+        let pubsub = ps.as_ref().ok_or_else(|| {
+            Error::new(magnus::exception::runtime_error(), "Engine not initialized")
+        })?;
 
         Ok(rt.block_on(async { pubsub.subscription_count().await }))
     })

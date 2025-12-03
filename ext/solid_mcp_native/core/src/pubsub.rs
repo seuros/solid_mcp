@@ -136,7 +136,10 @@ impl PubSub {
 
     /// Cleanup old messages
     pub async fn cleanup(&self) -> Result<(u64, u64)> {
-        let delivered = self.db.cleanup_delivered(self.config.delivered_retention).await?;
+        let delivered = self
+            .db
+            .cleanup_delivered(self.config.delivered_retention)
+            .await?;
         let undelivered = self
             .db
             .cleanup_undelivered(self.config.undelivered_retention)
@@ -195,9 +198,12 @@ mod tests {
         let received_clone = received.clone();
 
         pubsub
-            .subscribe("session-1", Box::new(move |_| {
-                received_clone.fetch_add(1, Ordering::SeqCst);
-            }))
+            .subscribe(
+                "session-1",
+                Box::new(move |_| {
+                    received_clone.fetch_add(1, Ordering::SeqCst);
+                }),
+            )
             .await
             .unwrap();
 
@@ -219,8 +225,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_pubsub_multiple_sessions() {
-        let config = Config::new("sqlite::memory:")
-            .polling_interval(Duration::from_millis(10));
+        let config = Config::new("sqlite::memory:").polling_interval(Duration::from_millis(10));
 
         let pubsub = PubSub::new(config).await.unwrap();
 
@@ -231,16 +236,22 @@ mod tests {
         let r2 = received2.clone();
 
         pubsub
-            .subscribe("session-1", Box::new(move |_| {
-                r1.fetch_add(1, Ordering::SeqCst);
-            }))
+            .subscribe(
+                "session-1",
+                Box::new(move |_| {
+                    r1.fetch_add(1, Ordering::SeqCst);
+                }),
+            )
             .await
             .unwrap();
 
         pubsub
-            .subscribe("session-2", Box::new(move |_| {
-                r2.fetch_add(1, Ordering::SeqCst);
-            }))
+            .subscribe(
+                "session-2",
+                Box::new(move |_| {
+                    r2.fetch_add(1, Ordering::SeqCst);
+                }),
+            )
             .await
             .unwrap();
 
@@ -260,8 +271,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_pubsub_unsubscribe() {
-        let config = Config::new("sqlite::memory:")
-            .polling_interval(Duration::from_millis(10));
+        let config = Config::new("sqlite::memory:").polling_interval(Duration::from_millis(10));
 
         let pubsub = PubSub::new(config).await.unwrap();
 
@@ -269,9 +279,12 @@ mod tests {
         let r = received.clone();
 
         pubsub
-            .subscribe("session-1", Box::new(move |_| {
-                r.fetch_add(1, Ordering::SeqCst);
-            }))
+            .subscribe(
+                "session-1",
+                Box::new(move |_| {
+                    r.fetch_add(1, Ordering::SeqCst);
+                }),
+            )
             .await
             .unwrap();
 

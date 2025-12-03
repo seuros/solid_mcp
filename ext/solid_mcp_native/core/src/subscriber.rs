@@ -4,12 +4,12 @@
 //! - PostgreSQL: Uses LISTEN/NOTIFY for real-time delivery (no polling)
 //! - SQLite: Falls back to efficient async polling
 
-use crate::db::{Database, DbPool};
 #[cfg(feature = "postgres")]
 use crate::db::postgres::PostgresPool;
+use crate::db::{Database, DbPool};
 use crate::{Config, Message, Result};
-use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::time::Duration;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
@@ -187,7 +187,10 @@ async fn postgres_subscriber_loop(
             }
         }
         Err(e) => {
-            error!("Error catching up messages for session {}: {}", session_id, e);
+            error!(
+                "Error catching up messages for session {}: {}",
+                session_id, e
+            );
         }
     }
 
@@ -195,7 +198,10 @@ async fn postgres_subscriber_loop(
     let mut listener = match pg.listen(&session_id).await {
         Ok(l) => l,
         Err(e) => {
-            error!("Failed to create listener for session {}: {}", session_id, e);
+            error!(
+                "Failed to create listener for session {}: {}",
+                session_id, e
+            );
             return;
         }
     };
@@ -242,7 +248,10 @@ async fn postgres_subscriber_loop(
         }
     }
 
-    debug!("LISTEN/NOTIFY subscriber for session {} stopped", session_id);
+    debug!(
+        "LISTEN/NOTIFY subscriber for session {} stopped",
+        session_id
+    );
 }
 
 #[cfg(test)]
@@ -255,8 +264,7 @@ mod tests {
     async fn test_polling_subscriber() {
         let sqlite = SqlitePool::new("sqlite::memory:").await.unwrap();
         let db = Arc::new(DbPool::Sqlite(sqlite));
-        let config = Config::new("sqlite::memory:")
-            .polling_interval(Duration::from_millis(10));
+        let config = Config::new("sqlite::memory:").polling_interval(Duration::from_millis(10));
 
         let received = Arc::new(AtomicUsize::new(0));
         let received_clone = received.clone();
