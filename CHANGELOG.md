@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+## [0.5.0](https://github.com/seuros/solid_mcp/compare/solid_mcp/v0.2.3...solid_mcp/v0.5.0) (2025-12-03)
+
+
+### Bug Fixes
+
+* improve thread safety and reliability ([35090eb](https://github.com/seuros/solid_mcp/commit/35090eb7e04bad73642eb9f52b6bcbc4757e8879))
+* thread safety and memory management improvements ([c967510](https://github.com/seuros/solid_mcp/commit/c9675109ff8709f8a0a5a5a709f880cdbf9b0c06))
+
 ## [0.2.3](https://github.com/seuros/solid_mcp/compare/solid_mcp/v0.2.2...solid_mcp/v0.2.3) (2025-07-01)
 
 
