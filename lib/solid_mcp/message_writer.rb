@@ -127,8 +127,18 @@ module SolidMCP
       batch_size = SolidMCP.configuration.batch_size
       flush_markers = []
 
-      # Get first item with timeout (blocking)
-      item = @queue.pop(false) rescue nil # blocking pop, returns nil on shutdown
+      # Get first item - use blocking pop with timeout to avoid busy spin
+      item = nil
+      until @shutdown.true? && @queue.empty?
+        begin
+          # Blocking pop with timeout allows clean shutdown checking
+          item = @queue.pop(timeout: 0.1)
+          break if item
+        rescue ThreadError
+          # Queue closed, exit
+          break
+        end
+      end
 
       return batch unless item
 

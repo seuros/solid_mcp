@@ -7,4 +7,25 @@
 /spec/reports/
 /tmp/
 Gemfile.lock
-/test/test.db
+
+# Test databases
+/test/*.db
+/test/*.db-shm
+/test/*.db-wal
+
+# Rust build artifacts
+/target/
+/ext/solid_mcp_native/target/
+/lib/solid_mcp_native/
+*.bundle
+*.so
+*.dll
+
+# Build artifacts
+/ext/solid_mcp_native/Makefile
+/ext/solid_mcp_native/mkmf.log
+/ext/solid_mcp_native/*.bundle
+/ext/solid_mcp_native/*.bundle.dSYM/
+/ext/solid_mcp_native/solid_mcp_native/
+/ext/solid_mcp_native/.sitearchdir.time
+Cargo.lock

@@ -37,3 +37,6 @@ module SolidMCP
   # Initialize with default configuration
   self.configuration = Configuration.new
 end
+
+# Load native speedup AFTER module is defined (optional - gracefully falls back to pure Ruby)
+require_relative "solid_mcp/native_speedup"
